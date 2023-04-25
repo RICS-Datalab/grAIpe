@@ -5,7 +5,7 @@ import requests
 import shutil
 import rasterio
 from rasterio.enums import Resampling
-
+from enum import Enum
 
 app = FastAPI()
 
@@ -21,7 +21,17 @@ class Project(BaseModel):
         id: int
         task_id: str
 
-@app.post("/authentication")
+class IndexName(str, Enum):
+    all = "all.zip"
+    orthophoto_tif = "orthophoto.tif"
+    orthophoto_png = "orthophoto.png"
+    orthophoto_mbtiles = "orthophoto.mbtiles"
+    textured_model = "textured_model.zip"
+    georeferenced_model_las = "georeferenced_model.las"
+    georeferenced_model_ply = "georeferenced_model.ply"
+    georeferenced_model_csv = "georeferenced_model.csv"    
+
+@app.post("/login")
 async def auth(user: User):
     res = requests.post('http://localhost:8000/api/token-auth/',
                         data={'username': user.username,
@@ -54,9 +64,9 @@ def create_execute_task(token, project_id, images):
     return task_id
 ####################
 
-@app.get("/orthophoto")
-def get_orthophoto(proj : Project):
-    res = requests.get("http://localhost:8000/api/projects/{}/tasks/{}/download/orthophoto.tif".format(proj.id, proj.task_id),
+@app.get("/download/{file}")
+def get_orthophoto(proj : Project, file : IndexName):
+    res = requests.get("http://localhost:8000/api/projects/{}/tasks/{}/download/{}".format(proj.id, proj.task_id, file),
                     headers={'Authorization': 'JWT {}'.format(proj.token)},
                     stream=True)
 
