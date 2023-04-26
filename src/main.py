@@ -1,5 +1,8 @@
 import uvicorn
-from fastapi import FastAPI
+from typing import Annotated
+from fastapi import FastAPI, Depends, Header, Request
+from fastapi.security import OAuth2PasswordBearer
+import jwt
 from pydantic import BaseModel 
 import requests
 import shutil
@@ -9,6 +12,9 @@ from enum import Enum
 
 app = FastAPI()
 
+JWT_SECRET = "secret" # IRL we should NEVER hardcode the secret: it should be an evironment variable!!!
+JWT_ALGORITHM = "HS256"
+
 class User(BaseModel):
         username: str
         password: str
@@ -17,11 +23,10 @@ class Authenticator(BaseModel):
         token: str
 
 class Project(BaseModel):
-        name: str
         id: int
         task_id: str
 
-class IndexName(str, Enum):
+class FileName(str, Enum):
     all = "all.zip"
     orthophoto_tif = "orthophoto.tif"
     orthophoto_png = "orthophoto.png"
@@ -31,6 +36,45 @@ class IndexName(str, Enum):
     georeferenced_model_ply = "georeferenced_model.ply"
     georeferenced_model_csv = "georeferenced_model.csv"    
 
+class IndexName(str, Enum):
+     ndvi = "NDVI" 
+     ndyi = "NDYI" 
+     ndre = "NDRE" 
+     ndwi = "NDWI" 
+     endvi = "ENDVI" 
+     vndvi = "vNDVI" 
+     vari ="VARI" 
+     exg = "EXG" 
+     tgi = "TGI" 
+     bai = "BAI" 
+     gli = "GLI"
+     gndvi = "GNDVI" 
+     grvi = "GRVI"
+     savi = "SAVI"
+     mnli = "MNLI"
+     ms = "MS"
+     rdvi = "RDVI"
+     tdvi = "TDVI" 
+     osavi = "OSAVI"
+     lai = "LAI"
+     evi = "EVI"
+     arvi = "ARVI"
+
+class MapName(str, Enum):
+     dsm = "DSM"
+     dtm = "DTM"
+     chm = "CHM"
+
+class Data(BaseModel):
+    'color_map': str
+    'formula': str
+    'bands': str
+    'hillshade': str
+    'rescale': str
+    'size': str
+    'format': str
+    'epsg': str
+
 @app.post("/login")
 async def auth(user: User):
     res = requests.post('http://localhost:8000/api/token-auth/',
@@ -39,18 +83,24 @@ async def auth(user: User):
     token = res['token']
     return token
 
-@app.post("/create_project")
-def create_proj(tkn : Authenticator, proj : Project):
+@app.post("/create_project/{name}")
+async def create_proj(tkn : Authenticator,  name):
     proj_res = requests.post('http://localhost:8000/api/projects/',
                         headers={'Authorization': 'JWT {}'.format(tkn.token)},
-                        data={'name': proj.name}).json()
+                        data={'name': name}).json()
 
     project_id = proj_res['id']
     return project_id
 
+# depois tentar com JWT
+@app.get("/list_projects")
+async def list_projs(Authorization: Annotated[str | None, Header()] = None):
+    res = requests.get('http://localhost:8000/api/projects/', headers={'Authorization': 'JWT {}'.format(Authorization)})
+    return res.json()
+
 #melhorar isso aqui
 @app.post("/create_execute_task")
-def create_execute_task(token, project_id, images):
+async def create_execute_task(token, project_id, images):
     res = requests.post('http://localhost:8000/api/projects/{}/tasks/'.format(project_id), 
                 headers={'Authorization': 'JWT {}'.format(token)},
                 files=images,
@@ -65,17 +115,17 @@ def create_execute_task(token, project_id, images):
 ####################
 
 @app.get("/download/{file}")
-def get_orthophoto(proj : Project, file : IndexName):
+async def get_orthophoto(proj : Project, file : FileName, Authorization: Annotated[str | None, Header()] = None):
     res = requests.get("http://localhost:8000/api/projects/{}/tasks/{}/download/{}".format(proj.id, proj.task_id, file),
-                    headers={'Authorization': 'JWT {}'.format(proj.token)},
+                    headers={'Authorization': 'JWT {}'.format(Authorization)},
                     stream=True)
 
-@app.get("/index")
-def get_index(token, project_id, task_id, export_file, data):
+@app.get("/index/{index}")
+async def get_index(proj : Project, index, data: Data,  Authorization: Annotated[str | None, Header()] = None):
 
-    dsm_wrkr = requests.post('http://localhost:8000/api/projects/{}/tasks/{}/{}/export'.format(project_id, task_id, export_file),
-                        headers={'Authorization': 'JWT {}'.format(token)}, data=data).json()
-    if export_file == 'orthophoto':
+    dsm_wrkr = requests.post('http://localhost:8000/api/projects/{}/tasks/{}/{}/export'.format(proj.id, proj.task_id, index),
+                        headers={'Authorization': 'JWT {}'.format(Authorization)}, data=data).json()
+    if index == 'orthophoto':
         print(dsm_wrkr)
         print(dsm_wrkr['celery_task_id'])
         wrkr_uuid = dsm_wrkr['celery_task_id']
@@ -83,13 +133,13 @@ def get_index(token, project_id, task_id, export_file, data):
         #Activate worker
         while True:
             wrkr = requests.get('http://localhost:8000/api/workers/check/{}'.format(wrkr_uuid),
-                            headers={'Authorization': 'JWT {}'.format(token)}).json()
+                            headers={'Authorization': 'JWT {}'.format(Authorization)}).json()
 
             if wrkr['ready'] == True:
                 break
 
         res = requests.get('http://localhost:8000/api/workers/get/{}?filename={}'.format(wrkr_uuid, param.def_ndvi_file),
-                        headers={'Authorization': 'JWT {}'.format(token)})
+                        headers={'Authorization': 'JWT {}'.format(Authorization)})
         print(res)
         content = res.content
 
@@ -97,10 +147,10 @@ def get_index(token, project_id, task_id, export_file, data):
         with open(param.def_ndvi_file, 'wb') as f:
             f.write(content)
 
-@app.get("/dsm_dtm")
-def get_dtm_dsm(token, project_id, task_id, file):
-    res = requests.get('http://localhost:8000/api/projects/{}/tasks/{}/download/{}.tif'.format(project_id, task_id, file),
-                    headers={'Authorization': 'JWT {}'.format(token)})
+@app.get("/dsm_dtm_chm/{file}")
+async def get_dtm_dsm_chm(proj : Project, file : MapName, Authorization: Annotated[str | None, Header()] = None):
+    res = requests.get('http://localhost:8000/api/projects/{}/tasks/{}/download/{}.tif'.format(proj.id, proj.task_id, file),
+                    headers={'Authorization': 'JWT {}'.format(Authorization)})
     print(res)
     content = res.content
 
@@ -109,7 +159,7 @@ def get_dtm_dsm(token, project_id, task_id, file):
         f.write(content)
 
 @app.get("/full")
-def output_creation():
+async def output_creation():
     resample_list2 = ['orthophoto-NDVI_res.tif', 'orthophoto_res.tif']
 
     source_ortho = 'orthophoto.tif'
