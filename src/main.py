@@ -23,7 +23,7 @@ class Authenticator(BaseModel):
         token: str
 
 class Project(BaseModel):
-        id: int
+        project_id: int
         task_id: str
 
 class FileName(str, Enum):
@@ -66,14 +66,21 @@ class MapName(str, Enum):
      chm = "CHM"
 
 class Data(BaseModel):
-    'color_map': str
-    'formula': str
-    'bands': str
-    'hillshade': str
-    'rescale': str
-    'size': str
-    'format': str
-    'epsg': str
+    color_map: str
+    formula: str
+    bands: str
+    hillshade: str
+    rescale: str
+    size: str
+    format: str
+    epsg: str
+
+#HELPERS
+def orthophoto(project, task, file, authorization):
+    res = requests.get("http://localhost:8000/api/projects/{}/tasks/{}/download/{}".format(project, task, file),
+                    headers={'Authorization': 'JWT {}'.format(authorization)},
+                    stream=True)
+    return res
 
 @app.post("/login")
 async def auth(user: User):
@@ -84,9 +91,9 @@ async def auth(user: User):
     return token
 
 @app.post("/create_project/{name}")
-async def create_proj(tkn : Authenticator,  name):
+async def create_proj(name, Authorization: Annotated[str | None, Header()] = None):
     proj_res = requests.post('http://localhost:8000/api/projects/',
-                        headers={'Authorization': 'JWT {}'.format(tkn.token)},
+                        headers={'Authorization': 'JWT {}'.format(Authorization)},
                         data={'name': name}).json()
 
     project_id = proj_res['id']
@@ -99,10 +106,10 @@ async def list_projs(Authorization: Annotated[str | None, Header()] = None):
     return res.json()
 
 #melhorar isso aqui
-@app.post("/create_execute_task")
-async def create_execute_task(token, project_id, images):
-    res = requests.post('http://localhost:8000/api/projects/{}/tasks/'.format(project_id), 
-                headers={'Authorization': 'JWT {}'.format(token)},
+@app.post("/create_execute_task/{project}}")
+async def create_execute_task(project, images, Authorization: Annotated[str | None, Header()] = None):
+    res = requests.post('http://localhost:8000/api/projects/{}/tasks/'.format(project), 
+                headers={'Authorization': 'JWT {}'.format(Authorization)},
                 files=images,
                 data={
                     'options': options
@@ -114,42 +121,66 @@ async def create_execute_task(token, project_id, images):
     return task_id
 ####################
 
-@app.get("/download/{file}")
-async def get_orthophoto(proj : Project, file : FileName, Authorization: Annotated[str | None, Header()] = None):
-    res = requests.get("http://localhost:8000/api/projects/{}/tasks/{}/download/{}".format(proj.id, proj.task_id, file),
-                    headers={'Authorization': 'JWT {}'.format(Authorization)},
-                    stream=True)
+@app.get("/download/{project}/{task}/{file}")
+async def get_orthophoto(project, task, file : FileName, Authorization: Annotated[str | None, Header()] = None):
+    orthophoto(project, task, file, Authorization)
 
-@app.get("/index/{index}")
-async def get_index(proj : Project, index, data: Data,  Authorization: Annotated[str | None, Header()] = None):
-
-    dsm_wrkr = requests.post('http://localhost:8000/api/projects/{}/tasks/{}/{}/export'.format(proj.id, proj.task_id, index),
+@app.get("/index/{project}/{task}/{index}")
+async def get_index(project, task, index : IndexName, data: Data, Authorization: Annotated[str | None, Header()] = None):
+    indexdict = {
+        'ndvi' :"orthophoto-NDVI.tif",
+        'ndyi' : "orthophoto-NDYI.tif", 
+        'ndre' : "orthophoto-NDRE.tif", 
+        'ndwi' : "orthophoto-NDWI.tif", 
+        'vndvi' : "orthophoto-vNDVI.tif", 
+        'endvi' : "orthophoto-ENDVI.tif", 
+        'vari' :"orthophoto-VARI.tif", 
+        'exg' : "orthophoto-EXG.tif", 
+        'tgi' : "orthophoto-TGI.tif", 
+        'bai' : "orthophoto-BAI.tif", 
+        'gli' : "orthophoto-GLI.tif",
+        'gndvi' : "orthophoto-GNDVI.tif", 
+        'grvi' : "orthophoto-GRVI.tif",
+        'savi' : "orthophoto-SAVI.tif",
+        'mnli' : "orthophoto-MNLI.tif",
+        'ms' : "orthophoto-MS.tif",
+        'rdvi' : "orthophoto-RDVI.tif",
+        'tdvi' : "orthophoto-TDVI.tif", 
+        'osavi' : "orthophoto-OSAVI.tif",
+        'lai' : "orthophoto-LAI.tif",
+        'evi' : "orthophoto-EVI.tif",
+        'arvi' : "orthophoto-ARVI.tif",
+    }
+    
+    print(data)
+    
+    dsm_wrkr = requests.post('http://localhost:8000/api/projects/{}/tasks/{}/orthophoto/export'.format(project, task),
                         headers={'Authorization': 'JWT {}'.format(Authorization)}, data=data).json()
-    if index == 'orthophoto':
-        print(dsm_wrkr)
-        print(dsm_wrkr['celery_task_id'])
-        wrkr_uuid = dsm_wrkr['celery_task_id']
+    
+    print(dsm_wrkr)
+    print(dsm_wrkr['celery_task_id'])
+    wrkr_uuid = dsm_wrkr['celery_task_id']
+    #Activate worker
+    while True:
+        wrkr = requests.get('http://localhost:8000/api/workers/check/{}'.format(wrkr_uuid),
+                        headers={'Authorization': 'JWT {}'.format(Authorization)}).json()
 
-        #Activate worker
-        while True:
-            wrkr = requests.get('http://localhost:8000/api/workers/check/{}'.format(wrkr_uuid),
-                            headers={'Authorization': 'JWT {}'.format(Authorization)}).json()
+        if wrkr['ready'] == True:
+            break
+    
+    index_file = indexdict[index]
+    res = requests.get('http://localhost:8000/api/workers/get/{}?filename={}'.format(wrkr_uuid, index_file),
+                    headers={'Authorization': 'JWT {}'.format(Authorization)})
+    print(res)
+    content = res.content
 
-            if wrkr['ready'] == True:
-                break
+    # Write the byte string to a local file as binary data
+    with open(index_file, 'wb') as f:
+        f.write(content)
 
-        res = requests.get('http://localhost:8000/api/workers/get/{}?filename={}'.format(wrkr_uuid, param.def_ndvi_file),
-                        headers={'Authorization': 'JWT {}'.format(Authorization)})
-        print(res)
-        content = res.content
-
-        # Write the byte string to a local file as binary data
-        with open(param.def_ndvi_file, 'wb') as f:
-            f.write(content)
-
-@app.get("/dsm_dtm_chm/{file}")
-async def get_dtm_dsm_chm(proj : Project, file : MapName, Authorization: Annotated[str | None, Header()] = None):
-    res = requests.get('http://localhost:8000/api/projects/{}/tasks/{}/download/{}.tif'.format(proj.id, proj.task_id, file),
+@app.get("/dsm_dtm_chm/{project}/{task}/{file}")
+async def get_dtm_dsm_chm(project, task, file : MapName, Authorization: Annotated[str | None, Header()] = None):
+    res = requests.get('http://localhost:8000/api/projects/{}/tasks/{}/download/{}.tif'.format(project, task, file),
                     headers={'Authorization': 'JWT {}'.format(Authorization)})
     print(res)
     content = res.content
@@ -158,8 +189,8 @@ async def get_dtm_dsm_chm(proj : Project, file : MapName, Authorization: Annotat
     with open(file + '.tif', 'wb') as f:
         f.write(content)
 
-@app.get("/full")
-async def output_creation():
+@app.get("/full/{project}/{task}")
+async def output_creation(project, task, Authorization: Annotated[str | None, Header()] = None):
     resample_list2 = ['orthophoto-NDVI_res.tif', 'orthophoto_res.tif']
 
     source_ortho = 'orthophoto.tif'
