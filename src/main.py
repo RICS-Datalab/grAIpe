@@ -1,7 +1,7 @@
 import uvicorn
-from typing import Annotated
-from fastapi import FastAPI, Depends, Header, Request
-from fastapi.security import OAuth2PasswordBearer
+from typing import Annotated, Optional
+from fastapi import FastAPI, Header, UploadFile, Body
+from fastapi.responses import FileResponse
 import jwt
 from pydantic import BaseModel 
 import requests
@@ -63,24 +63,36 @@ class IndexName(str, Enum):
 class MapName(str, Enum):
      dsm = "DSM"
      dtm = "DTM"
-     chm = "CHM"
 
 class Data(BaseModel):
-    color_map: str
-    formula: str
-    bands: str
-    hillshade: str
-    rescale: str
-    size: str
-    format: str
-    epsg: str
+    color_map: str = Body('spectral')
+    formula: str = Body('NDVI')
+    bands: str = Body('RGBNRe')
+    hillshade: str = Body('')
+    rescale: str = Body('-1%2C1')
+    size: str = Body('512')
+    format: str = Body('gtiff')
+    epsg: str = Body('32629')
 
 #HELPERS
 def orthophoto(project, task, file, authorization):
     res = requests.get("http://localhost:8000/api/projects/{}/tasks/{}/download/{}".format(project, task, file),
                     headers={'Authorization': 'JWT {}'.format(authorization)},
                     stream=True)
+    
     return res
+
+def dtm_dsm_chm(project, task, file, authorization):
+    filedict = {
+        'DSM' : "dsm",
+        'DTM' : "dtm",
+    }
+    fileName = filedict[file]
+    
+    res = requests.get('http://localhost:8000/api/projects/{}/tasks/{}/download/{}.tif'.format(project, task, fileName),
+                    headers={'Authorization': 'JWT {}'.format(authorization)})
+    print(res)
+    content = res.content
 
 @app.post("/login")
 async def auth(user: User):
@@ -107,10 +119,10 @@ async def list_projs(Authorization: Annotated[str | None, Header()] = None):
 
 #melhorar isso aqui
 @app.post("/create_execute_task/{project}}")
-async def create_execute_task(project, images, Authorization: Annotated[str | None, Header()] = None):
+async def create_execute_task(project, images, file: UploadFile, Authorization: Annotated[str | None, Header()] = None):
     res = requests.post('http://localhost:8000/api/projects/{}/tasks/'.format(project), 
                 headers={'Authorization': 'JWT {}'.format(Authorization)},
-                files=images,
+                files=file,
                 data={
                     'options': options
                 }).json()
@@ -123,39 +135,57 @@ async def create_execute_task(project, images, Authorization: Annotated[str | No
 
 @app.get("/download/{project}/{task}/{file}")
 async def get_orthophoto(project, task, file : FileName, Authorization: Annotated[str | None, Header()] = None):
-    orthophoto(project, task, file, Authorization)
+    res = orthophoto(project, task, file, Authorization)
+    
+    with open(file, 'wb') as f:
+        for chunk in res.iter_content(chunk_size=1024):
+            if chunk:
+                f.write(chunk)
 
-@app.get("/index/{project}/{task}/{index}")
-async def get_index(project, task, index : IndexName, data: Data, Authorization: Annotated[str | None, Header()] = None):
+    return FileResponse("{}".format(file), filename=file)
+
+@app.post("/index/{project}/{task}/{index}")
+async def get_index(project, task, index : IndexName, data: Optional[Data], Authorization: Annotated[str | None, Header()] = None):
     indexdict = {
-        'ndvi' :"orthophoto-NDVI.tif",
-        'ndyi' : "orthophoto-NDYI.tif", 
-        'ndre' : "orthophoto-NDRE.tif", 
-        'ndwi' : "orthophoto-NDWI.tif", 
-        'vndvi' : "orthophoto-vNDVI.tif", 
-        'endvi' : "orthophoto-ENDVI.tif", 
-        'vari' :"orthophoto-VARI.tif", 
-        'exg' : "orthophoto-EXG.tif", 
-        'tgi' : "orthophoto-TGI.tif", 
-        'bai' : "orthophoto-BAI.tif", 
-        'gli' : "orthophoto-GLI.tif",
-        'gndvi' : "orthophoto-GNDVI.tif", 
-        'grvi' : "orthophoto-GRVI.tif",
-        'savi' : "orthophoto-SAVI.tif",
-        'mnli' : "orthophoto-MNLI.tif",
-        'ms' : "orthophoto-MS.tif",
-        'rdvi' : "orthophoto-RDVI.tif",
-        'tdvi' : "orthophoto-TDVI.tif", 
-        'osavi' : "orthophoto-OSAVI.tif",
-        'lai' : "orthophoto-LAI.tif",
-        'evi' : "orthophoto-EVI.tif",
-        'arvi' : "orthophoto-ARVI.tif",
+        'NDVI' :"orthophoto-NDVI.tif",
+        'NDYI' : "orthophoto-NDYI.tif", 
+        'NDRE' : "orthophoto-NDRE.tif", 
+        'NDWI' : "orthophoto-NDWI.tif", 
+        'VNDVI' : "orthophoto-vNDVI.tif", 
+        'ENDVI' : "orthophoto-ENDVI.tif", 
+        'VARI' :"orthophoto-VARI.tif", 
+        'EXG' : "orthophoto-EXG.tif", 
+        'TGI' : "orthophoto-TGI.tif", 
+        'BAI' : "orthophoto-BAI.tif", 
+        'GLI' : "orthophoto-GLI.tif",
+        'GNDVI' : "orthophoto-GNDVI.tif", 
+        'GRVI' : "orthophoto-GRVI.tif",
+        'SAVI' : "orthophoto-SAVI.tif",
+        'MNLI' : "orthophoto-MNLI.tif",
+        'MS' : "orthophoto-MS.tif",
+        'RDVI' : "orthophoto-RDVI.tif",
+        'TDVI' : "orthophoto-TDVI.tif", 
+        'OSAVI' : "orthophoto-OSAVI.tif",
+        'LAI' : "orthophoto-LAI.tif",
+        'EVI' : "orthophoto-EVI.tif",
+        'ARVI' : "orthophoto-ARVI.tif",
     }
-    
-    print(data)
-    
+
+    data_index = {
+        'color_map': data.color_map,
+        'formula': index,
+        'bands': data.bands,
+        'hillshade': data.hillshade,
+        'rescale': data.rescale,
+        'size': data.size,
+        'format': data.format,
+        'epsg': data.epsg
+    }
+
+    print(index)
+
     dsm_wrkr = requests.post('http://localhost:8000/api/projects/{}/tasks/{}/orthophoto/export'.format(project, task),
-                        headers={'Authorization': 'JWT {}'.format(Authorization)}, data=data).json()
+                        headers={'Authorization': 'JWT {}'.format(Authorization)}, data=data_index).json()
     
     print(dsm_wrkr)
     print(dsm_wrkr['celery_task_id'])
@@ -167,8 +197,10 @@ async def get_index(project, task, index : IndexName, data: Data, Authorization:
 
         if wrkr['ready'] == True:
             break
-    
+
+    print("KUNAMI")
     index_file = indexdict[index]
+    print(index_file)
     res = requests.get('http://localhost:8000/api/workers/get/{}?filename={}'.format(wrkr_uuid, index_file),
                     headers={'Authorization': 'JWT {}'.format(Authorization)})
     print(res)
@@ -178,21 +210,42 @@ async def get_index(project, task, index : IndexName, data: Data, Authorization:
     with open(index_file, 'wb') as f:
         f.write(content)
 
+    return FileResponse("{}".format(index_file), filename=index_file)
+
 @app.get("/dsm_dtm_chm/{project}/{task}/{file}")
 async def get_dtm_dsm_chm(project, task, file : MapName, Authorization: Annotated[str | None, Header()] = None):
-    res = requests.get('http://localhost:8000/api/projects/{}/tasks/{}/download/{}.tif'.format(project, task, file),
-                    headers={'Authorization': 'JWT {}'.format(Authorization)})
-    print(res)
+    
+    res = dtm_dsm_chm(project, task, file, Authorization)
+    
     content = res.content
 
     # Write the byte string to a local file as binary data
     with open(file + '.tif', 'wb') as f:
         f.write(content)
 
-@app.get("/full/{project}/{task}")
-async def output_creation(project, task, Authorization: Annotated[str | None, Header()] = None):
-    resample_list2 = ['orthophoto-NDVI_res.tif', 'orthophoto_res.tif']
+    return FileResponse("{}".format(file + '.tif'), filename=file + '.tif')
 
+@app.get("/full/{project}/{task}")
+async def output_creation(project, task, file : FileName, Authorization: Annotated[str | None, Header()] = None):
+    
+    res = orthophoto(project, task, file, Authorization)
+    with open(file, 'wb') as f:
+        for chunk in res.iter_content(chunk_size=1024):
+            if chunk:
+                f.write(chunk)
+    
+    dsm = dtm_dsm_chm(project, task, 'dsm', Authorization)
+    dsmContent = dsm.content
+    with open('dsm.tif', 'wb') as f:
+        f.write(dsmContent)
+
+    dtm = dtm_dsm_chm(project, task, 'dtm', Authorization)
+    dtmContent = dtm.content
+    with open('dtm.tif', 'wb') as f:
+        f.write(dtmContent)
+
+    resample_list2 = ['orthophoto-NDVI.tif', 'orthophoto.tif']
+    '''
     source_ortho = 'orthophoto.tif'
     target_ortho = 'orthophoto_res.tif'
     source_index = 'orthophoto-NDVI.tif'
@@ -200,7 +253,7 @@ async def output_creation(project, task, Authorization: Annotated[str | None, He
     # copy the file and rename it
     shutil.copyfile(source_ortho, target_ortho)
     shutil.copyfile(source_index, target_index)
-
+    '''
     #Resize the smaller images
     for image in resample_list2:
         with rasterio.open(image) as src:
