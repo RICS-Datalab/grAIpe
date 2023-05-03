@@ -82,70 +82,7 @@ def orthophoto(project, task, file, authorization):
     
     return res
 
-def dtm_dsm_chm(project, task, file, authorization):
-    filedict = {
-        'DSM' : "dsm",
-        'DTM' : "dtm",
-    }
-    fileName = filedict[file]
-    
-    res = requests.get('http://localhost:8000/api/projects/{}/tasks/{}/download/{}.tif'.format(project, task, fileName),
-                    headers={'Authorization': 'JWT {}'.format(authorization)})
-    print(res)
-    content = res.content
-
-@app.post("/login")
-async def auth(user: User):
-    res = requests.post('http://localhost:8000/api/token-auth/',
-                        data={'username': user.username,
-                              'password': user.password}).json()
-    token = res['token']
-    return token
-
-@app.post("/create_project/{name}")
-async def create_proj(name, Authorization: Annotated[str | None, Header()] = None):
-    proj_res = requests.post('http://localhost:8000/api/projects/',
-                        headers={'Authorization': 'JWT {}'.format(Authorization)},
-                        data={'name': name}).json()
-
-    project_id = proj_res['id']
-    return project_id
-
-# depois tentar com JWT
-@app.get("/list_projects")
-async def list_projs(Authorization: Annotated[str | None, Header()] = None):
-    res = requests.get('http://localhost:8000/api/projects/', headers={'Authorization': 'JWT {}'.format(Authorization)})
-    return res.json()
-
-#melhorar isso aqui
-@app.post("/create_execute_task/{project}}")
-async def create_execute_task(project, images, file: UploadFile, Authorization: Annotated[str | None, Header()] = None):
-    res = requests.post('http://localhost:8000/api/projects/{}/tasks/'.format(project), 
-                headers={'Authorization': 'JWT {}'.format(Authorization)},
-                files=file,
-                data={
-                    'options': options
-                }).json()
-
-    print(res)
-    task_id = res['id']
-
-    return task_id
-####################
-
-@app.get("/download/{project}/{task}/{file}")
-async def get_orthophoto(project, task, file : FileName, Authorization: Annotated[str | None, Header()] = None):
-    res = orthophoto(project, task, file, Authorization)
-    
-    with open(file, 'wb') as f:
-        for chunk in res.iter_content(chunk_size=1024):
-            if chunk:
-                f.write(chunk)
-
-    return FileResponse("{}".format(file), filename=file)
-
-@app.post("/index/{project}/{task}/{index}")
-async def get_index(project, task, index : IndexName, data: Optional[Data], Authorization: Annotated[str | None, Header()] = None):
+def index_creation(project, task, index, data, Authorization):
     indexdict = {
         'NDVI' :"orthophoto-NDVI.tif",
         'NDYI' : "orthophoto-NDYI.tif", 
@@ -198,15 +135,110 @@ async def get_index(project, task, index : IndexName, data: Optional[Data], Auth
         if wrkr['ready'] == True:
             break
 
-    print("KUNAMI")
     index_file = indexdict[index]
     print(index_file)
     res = requests.get('http://localhost:8000/api/workers/get/{}?filename={}'.format(wrkr_uuid, index_file),
                     headers={'Authorization': 'JWT {}'.format(Authorization)})
     print(res)
     content = res.content
+    #with open(index_file, 'wb') as f:
+    #    f.write(content)
+    return content
+    
+def dtm_dsm_chm(project, task, file, authorization):
+    filedict = {
+        'DSM' : "dsm",
+        'DTM' : "dtm",
+    }
+    fileName = filedict[file]
+    
+    res = requests.get('http://localhost:8000/api/projects/{}/tasks/{}/download/{}.tif'.format(project, task, fileName),
+                    headers={'Authorization': 'JWT {}'.format(authorization)})
+    print(res)
+    content = res.content
+    return content
 
-    # Write the byte string to a local file as binary data
+@app.post("/login")
+async def auth(user: User):
+    res = requests.post('http://localhost:8000/api/token-auth/',
+                        data={'username': user.username,
+                              'password': user.password}).json()
+    token = res['token']
+    return token
+
+@app.post("/create_project/{name}")
+async def create_proj(name, Authorization: Annotated[str | None, Header()] = None):
+    proj_res = requests.post('http://localhost:8000/api/projects/',
+                        headers={'Authorization': 'JWT {}'.format(Authorization)},
+                        data={'name': name}).json()
+
+    project_id = proj_res['id']
+    return project_id
+
+# depois tentar com JWT
+@app.get("/list_projects")
+async def list_projs(Authorization: Annotated[str | None, Header()] = None):
+    res = requests.get('http://localhost:8000/api/projects/', headers={'Authorization': 'JWT {}'.format(Authorization)})
+    return res.json()
+
+#melhorar isso aqui
+@app.post("/create_execute_task/{project}}")
+async def create_execute_task(project, options, file: UploadFile, Authorization: Annotated[str | None, Header()] = None):
+    print(file)
+    '''res = requests.post('http://localhost:8000/api/projects/{}/tasks/'.format(project),
+                headers={'Authorization': 'JWT {}'.format(Authorization)},
+                files=file,
+                data={
+                    'options': options
+                }).json()'''
+
+    #print(res)
+    #task_id = res['id']
+
+    #return task_id
+####################
+
+@app.get("/download/{project}/{task}/{file}")
+async def get_orthophoto(project, task, file : FileName, Authorization: Annotated[str | None, Header()] = None):
+    res = orthophoto(project, task, file, Authorization)
+    
+    with open(file, 'wb') as f:
+        for chunk in res.iter_content(chunk_size=1024):
+            if chunk:
+                f.write(chunk)
+
+    return FileResponse("{}".format(file), filename=file)
+
+@app.post("/index/{project}/{task}/{index}")
+async def get_index(project, task, index : IndexName, data: Optional[Data], Authorization: Annotated[str | None, Header()] = None):
+    indexdict = {
+        'NDVI' :"orthophoto-NDVI.tif",
+        'NDYI' : "orthophoto-NDYI.tif", 
+        'NDRE' : "orthophoto-NDRE.tif", 
+        'NDWI' : "orthophoto-NDWI.tif", 
+        'VNDVI' : "orthophoto-vNDVI.tif", 
+        'ENDVI' : "orthophoto-ENDVI.tif", 
+        'VARI' :"orthophoto-VARI.tif", 
+        'EXG' : "orthophoto-EXG.tif", 
+        'TGI' : "orthophoto-TGI.tif", 
+        'BAI' : "orthophoto-BAI.tif", 
+        'GLI' : "orthophoto-GLI.tif",
+        'GNDVI' : "orthophoto-GNDVI.tif", 
+        'GRVI' : "orthophoto-GRVI.tif",
+        'SAVI' : "orthophoto-SAVI.tif",
+        'MNLI' : "orthophoto-MNLI.tif",
+        'MS' : "orthophoto-MS.tif",
+        'RDVI' : "orthophoto-RDVI.tif",
+        'TDVI' : "orthophoto-TDVI.tif", 
+        'OSAVI' : "orthophoto-OSAVI.tif",
+        'LAI' : "orthophoto-LAI.tif",
+        'EVI' : "orthophoto-EVI.tif",
+        'ARVI' : "orthophoto-ARVI.tif",
+    }
+
+    index_file = indexdict[index]
+
+    content = index_creation(project, task, index, data, Authorization)
     with open(index_file, 'wb') as f:
         f.write(content)
 
@@ -217,34 +249,36 @@ async def get_dtm_dsm_chm(project, task, file : MapName, Authorization: Annotate
     
     res = dtm_dsm_chm(project, task, file, Authorization)
     
-    content = res.content
-
     # Write the byte string to a local file as binary data
     with open(file + '.tif', 'wb') as f:
-        f.write(content)
+        f.write(res)
 
     return FileResponse("{}".format(file + '.tif'), filename=file + '.tif')
 
-@app.get("/full/{project}/{task}")
-async def output_creation(project, task, file : FileName, Authorization: Annotated[str | None, Header()] = None):
+@app.get("/full/{project}/{task}/{index}")
+async def output_creation(project, task, index : IndexName, data: Optional[Data],Authorization: Annotated[str | None, Header()] = None):
     
-    res = orthophoto(project, task, file, Authorization)
-    with open(file, 'wb') as f:
+    res = orthophoto(project, task, 'orthophoto.tif', Authorization)
+    with open('orthophoto.tif', 'wb') as f:
         for chunk in res.iter_content(chunk_size=1024):
             if chunk:
                 f.write(chunk)
-    
-    dsm = dtm_dsm_chm(project, task, 'dsm', Authorization)
-    dsmContent = dsm.content
+
+    print("HERE")
+ 
+    content = index_creation(project, task, index, data, Authorization)
+    with open("index.tif", 'wb') as f:
+        f.write(content)
+
+    dsm = dtm_dsm_chm(project, task, 'DSM', Authorization)
     with open('dsm.tif', 'wb') as f:
-        f.write(dsmContent)
+        f.write(dsm)
 
-    dtm = dtm_dsm_chm(project, task, 'dtm', Authorization)
-    dtmContent = dtm.content
+    dtm = dtm_dsm_chm(project, task, 'DTM', Authorization)
     with open('dtm.tif', 'wb') as f:
-        f.write(dtmContent)
+        f.write(dtm)
 
-    resample_list2 = ['orthophoto-NDVI.tif', 'orthophoto.tif']
+    resample_list2 = ['index.tif', 'orthophoto.tif']
     '''
     source_ortho = 'orthophoto.tif'
     target_ortho = 'orthophoto_res.tif'
@@ -297,8 +331,8 @@ async def output_creation(project, task, file : FileName, Authorization: Annotat
     
     
     # Open the source TIFF files
-    src1 = rasterio.open('orthophoto_res.tif')
-    src2 = rasterio.open('orthophoto-NDVI_res.tif')
+    src1 = rasterio.open('orthophoto.tif')
+    src2 = rasterio.open('index.tif')
     src3 = rasterio.open('chm.tif')
 
     # Define the output file
@@ -333,6 +367,8 @@ async def output_creation(project, task, file : FileName, Authorization: Annotat
     src1.close()
     src2.close()
     src3.close()
+
+    return FileResponse("final.tif", filename='final.tif')
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8888)
