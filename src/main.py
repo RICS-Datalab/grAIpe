@@ -1,6 +1,6 @@
 import uvicorn
-from typing import Annotated, Optional
-from fastapi import FastAPI, Header, UploadFile, Body
+from typing import Annotated, Optional, List
+from fastapi import FastAPI, Header, UploadFile, Body, File
 from fastapi.responses import FileResponse
 import jwt
 from pydantic import BaseModel 
@@ -9,6 +9,8 @@ import shutil
 import rasterio
 from rasterio.enums import Resampling
 from enum import Enum
+import json
+import os
 
 app = FastAPI()
 
@@ -73,6 +75,10 @@ class Data(BaseModel):
     size: str = Body('512')
     format: str = Body('gtiff')
     epsg: str = Body('32629')
+
+class Options(BaseModel):
+    name : str = Body('orthophoto')
+    value : int = Body(24)
 
 #HELPERS
 def orthophoto(project, task, file, authorization):
@@ -182,21 +188,57 @@ async def list_projs(Authorization: Annotated[str | None, Header()] = None):
     return res.json()
 
 #melhorar isso aqui
-@app.post("/create_execute_task/{project}}")
-async def create_execute_task(project, options, file: UploadFile, Authorization: Annotated[str | None, Header()] = None):
-    print(file)
-    '''res = requests.post('http://localhost:8000/api/projects/{}/tasks/'.format(project),
+@app.post("/create_execute_task/{project}")
+async def create_execute_task(project, files: List[UploadFile] = File(...), Authorization: Annotated[str | None, Header()] = None):
+    options_list = []
+    orthophoto_set = {'name': "orthophoto-resolution", 'value': 24}
+    autobound_set = {"name":"auto-boundary","value":True}
+    dsm_set = {"name":"dsm","value":True}
+    dtm_set = {"name":"dtm","value":True}
+
+    options_list.append(orthophoto_set)
+    options_list.append(autobound_set)
+    options_list.append(dsm_set)
+    options_list.append(dtm_set)
+
+    options = json.dumps(options_list)
+    first_file = files[0]
+    print(f"Received file: {first_file.filename}")
+
+    directory = "uploads"
+    if not os.path.exists(directory):
+        os.mkdir(directory)
+    for file in files:
+        with open(os.path.join(directory, file.filename), "wb") as f:
+            shutil.copyfileobj(file.file, f)
+    
+    file_list = []
+
+    for filename in os.listdir('uploads/'):
+        if os.path.isfile(os.path.join('uploads/', filename)):
+            file_list.append('uploads/'+ filename)
+
+    images = []
+    
+    for item in file_list:
+        with open(item, 'rb') as f:
+            images.append(('images', (item, f.read(), 'image/tif')))
+
+    res = requests.post('http://localhost:8000/api/projects/{}/tasks/'.format(project),
                 headers={'Authorization': 'JWT {}'.format(Authorization)},
-                files=file,
+                files=images,
                 data={
                     'options': options
-                }).json()'''
-
-    #print(res)
-    #task_id = res['id']
-
-    #return task_id
+                }).json()
+    print(res)
+    
+    return res
 ####################
+
+#this post endpoint in fastapi accepts a list of files and prints the name of the first 5 in the list
+
+
+
 
 @app.get("/download/{project}/{task}/{file}")
 async def get_orthophoto(project, task, file : FileName, Authorization: Annotated[str | None, Header()] = None):
