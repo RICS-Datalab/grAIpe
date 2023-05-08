@@ -1,8 +1,7 @@
 import uvicorn
 from typing import Annotated, Optional, List
-from fastapi import FastAPI, Header, UploadFile, Body, File
+from fastapi import FastAPI, Header, UploadFile, Body, File, Query
 from fastapi.responses import FileResponse
-import jwt
 from pydantic import BaseModel 
 import requests
 import shutil
@@ -13,9 +12,6 @@ import json
 import os
 
 app = FastAPI()
-
-JWT_SECRET = "secret" # IRL we should NEVER hardcode the secret: it should be an evironment variable!!!
-JWT_ALGORITHM = "HS256"
 
 class User(BaseModel):
         username: str
@@ -77,8 +73,12 @@ class Data(BaseModel):
     epsg: str = Body('32629')
 
 class Options(BaseModel):
-    name : str = Body('orthophoto')
-    value : int = Body(24)
+    name : str
+    value : str
+
+class OptionsList(BaseModel):
+    options : list[Options] | None = None
+
 
 #HELPERS
 def orthophoto(project, task, file, authorization):
@@ -181,15 +181,23 @@ async def create_proj(name, Authorization: Annotated[str | None, Header()] = Non
     project_id = proj_res['id']
     return project_id
 
-# depois tentar com JWT
 @app.get("/list_projects")
 async def list_projs(Authorization: Annotated[str | None, Header()] = None):
     res = requests.get('http://localhost:8000/api/projects/', headers={'Authorization': 'JWT {}'.format(Authorization)})
     return res.json()
 
-#melhorar isso aqui
+@app.post("/task/{project}")
+async def ask(data: OptionsList, project, files: List[UploadFile] = File(...), Authorization: Annotated[str | None, Header()] = None):
+    print(data)
+    print(project)
+    print(Authorization)
+    print(files)
+
 @app.post("/create_execute_task/{project}")
-async def create_execute_task(project, files: List[UploadFile] = File(...), Authorization: Annotated[str | None, Header()] = None):
+async def create_execute_task(data: OptionsList, project, files: List[UploadFile] = File(...), Authorization: Annotated[str | None, Header()] = None):
+    print(data)
+    print("kunami")
+    
     options_list = []
     orthophoto_set = {'name': "orthophoto-resolution", 'value': 24}
     autobound_set = {"name":"auto-boundary","value":True}
@@ -202,6 +210,7 @@ async def create_execute_task(project, files: List[UploadFile] = File(...), Auth
     options_list.append(dtm_set)
 
     options = json.dumps(options_list)
+
     first_file = files[0]
     print(f"Received file: {first_file.filename}")
 
@@ -233,12 +242,6 @@ async def create_execute_task(project, files: List[UploadFile] = File(...), Auth
     print(res)
     
     return res
-####################
-
-#this post endpoint in fastapi accepts a list of files and prints the name of the first 5 in the list
-
-
-
 
 @app.get("/download/{project}/{task}/{file}")
 async def get_orthophoto(project, task, file : FileName, Authorization: Annotated[str | None, Header()] = None):
