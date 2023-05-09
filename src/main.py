@@ -1,6 +1,6 @@
 import uvicorn
 from typing import Annotated, Optional, List
-from fastapi import FastAPI, Header, UploadFile, Body, File, Query
+from fastapi import FastAPI, Header, UploadFile, Body, File, Depends, Form
 from fastapi.responses import FileResponse
 from pydantic import BaseModel 
 import requests
@@ -73,12 +73,12 @@ class Data(BaseModel):
     epsg: str = Body('32629')
 
 class Options(BaseModel):
-    name : str
-    value : str
+    name : str 
+    value : str 
 
 class OptionsList(BaseModel):
-    options : list[Options] | None = None
-
+    options : list[Options]
+    
 
 #HELPERS
 def orthophoto(project, task, file, authorization):
@@ -164,6 +164,38 @@ def dtm_dsm_chm(project, task, file, authorization):
     content = res.content
     return content
 
+def optionsListCreation(data):
+    options_list = []
+    if data == None:
+        orthophoto_set = {'name': "orthophoto-resolution", 'value': 24}
+        autobound_set = {"name":"auto-boundary","value": True}
+        dsm_set = {"name":"dsm","value":True}
+        dtm_set = {"name":"dtm","value":True}
+
+        options_list.append(orthophoto_set)
+        options_list.append(autobound_set)
+        options_list.append(dsm_set)
+        options_list.append(dtm_set)
+
+        options_final = json.dumps(options_list)
+        print(options_list)
+        return options_final
+        
+    else:
+        option = json.loads(data)
+        for options in option['options']: 
+            if options["value"] == "true":
+                options["value"] = True
+            elif options["value"] == "false":
+                options["value"] = False
+            else:
+                options["value"] = int(options["value"])
+            options_list.append({"name":options["name"],"value":options["value"]})
+            options_final = json.dumps(options_list)
+
+        return options_final
+
+
 @app.post("/login")
 async def auth(user: User):
     res = requests.post('http://localhost:8000/api/token-auth/',
@@ -186,34 +218,11 @@ async def list_projs(Authorization: Annotated[str | None, Header()] = None):
     res = requests.get('http://localhost:8000/api/projects/', headers={'Authorization': 'JWT {}'.format(Authorization)})
     return res.json()
 
-@app.post("/task/{project}")
-async def ask(data: OptionsList, project, files: List[UploadFile] = File(...), Authorization: Annotated[str | None, Header()] = None):
-    print(data)
-    print(project)
-    print(Authorization)
-    print(files)
-
 @app.post("/create_execute_task/{project}")
-async def create_execute_task(data: OptionsList, project, files: List[UploadFile] = File(...), Authorization: Annotated[str | None, Header()] = None):
-    print(data)
-    print("kunami")
+async def ask(project, data: str = Form(None), files: List[UploadFile] = File(...), Authorization: Annotated[str | None, Header()] = None):
+    options = optionsListCreation(data)
+    print(options)
     
-    options_list = []
-    orthophoto_set = {'name': "orthophoto-resolution", 'value': 24}
-    autobound_set = {"name":"auto-boundary","value":True}
-    dsm_set = {"name":"dsm","value":True}
-    dtm_set = {"name":"dtm","value":True}
-
-    options_list.append(orthophoto_set)
-    options_list.append(autobound_set)
-    options_list.append(dsm_set)
-    options_list.append(dtm_set)
-
-    options = json.dumps(options_list)
-
-    first_file = files[0]
-    print(f"Received file: {first_file.filename}")
-
     directory = "uploads"
     if not os.path.exists(directory):
         os.mkdir(directory)
@@ -228,19 +237,17 @@ async def create_execute_task(data: OptionsList, project, files: List[UploadFile
             file_list.append('uploads/'+ filename)
 
     images = []
-    
     for item in file_list:
         with open(item, 'rb') as f:
             images.append(('images', (item, f.read(), 'image/tif')))
-
+    print("here")
     res = requests.post('http://localhost:8000/api/projects/{}/tasks/'.format(project),
                 headers={'Authorization': 'JWT {}'.format(Authorization)},
                 files=images,
                 data={
                     'options': options
                 }).json()
-    print(res)
-    
+    shutil.rmtree('uploads')
     return res
 
 @app.get("/download/{project}/{task}/{file}")
