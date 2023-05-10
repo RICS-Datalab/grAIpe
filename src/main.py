@@ -1,15 +1,16 @@
-import uvicorn
+from fastapi import FastAPI, Header, UploadFile, Body, File, Form
 from typing import Annotated, Optional, List
-from fastapi import FastAPI, Header, UploadFile, Body, File, Depends, Form
 from fastapi.responses import FileResponse
-from pydantic import BaseModel 
-import requests
-import shutil
-import rasterio
 from rasterio.enums import Resampling
-from enum import Enum
-import json
+from pydantic import BaseModel
+import orthophoto as ortho
+from enum import Enum 
+import requests
+import rasterio
+import uvicorn
+import shutil
 import os
+
 
 app = FastAPI()
 
@@ -80,124 +81,23 @@ class OptionsList(BaseModel):
     options : list[Options]
     
 
-#HELPERS
-def orthophoto(project, task, file, authorization):
-    res = requests.get("http://localhost:8000/api/projects/{}/tasks/{}/download/{}".format(project, task, file),
-                    headers={'Authorization': 'JWT {}'.format(authorization)},
-                    stream=True)
-    
-    return res
-
-def index_creation(project, task, index, data, Authorization):
-    indexdict = {
-        'NDVI' :"orthophoto-NDVI.tif",
-        'NDYI' : "orthophoto-NDYI.tif", 
-        'NDRE' : "orthophoto-NDRE.tif", 
-        'NDWI' : "orthophoto-NDWI.tif", 
-        'VNDVI' : "orthophoto-vNDVI.tif", 
-        'ENDVI' : "orthophoto-ENDVI.tif", 
-        'VARI' :"orthophoto-VARI.tif", 
-        'EXG' : "orthophoto-EXG.tif", 
-        'TGI' : "orthophoto-TGI.tif", 
-        'BAI' : "orthophoto-BAI.tif", 
-        'GLI' : "orthophoto-GLI.tif",
-        'GNDVI' : "orthophoto-GNDVI.tif", 
-        'GRVI' : "orthophoto-GRVI.tif",
-        'SAVI' : "orthophoto-SAVI.tif",
-        'MNLI' : "orthophoto-MNLI.tif",
-        'MS' : "orthophoto-MS.tif",
-        'RDVI' : "orthophoto-RDVI.tif",
-        'TDVI' : "orthophoto-TDVI.tif", 
-        'OSAVI' : "orthophoto-OSAVI.tif",
-        'LAI' : "orthophoto-LAI.tif",
-        'EVI' : "orthophoto-EVI.tif",
-        'ARVI' : "orthophoto-ARVI.tif",
-    }
-
-    data_index = {
-        'color_map': data.color_map,
-        'formula': index,
-        'bands': data.bands,
-        'hillshade': data.hillshade,
-        'rescale': data.rescale,
-        'size': data.size,
-        'format': data.format,
-        'epsg': data.epsg
-    }
-
-    print(index)
-
-    dsm_wrkr = requests.post('http://localhost:8000/api/projects/{}/tasks/{}/orthophoto/export'.format(project, task),
-                        headers={'Authorization': 'JWT {}'.format(Authorization)}, data=data_index).json()
-    
-    print(dsm_wrkr)
-    print(dsm_wrkr['celery_task_id'])
-    wrkr_uuid = dsm_wrkr['celery_task_id']
-    #Activate worker
-    while True:
-        wrkr = requests.get('http://localhost:8000/api/workers/check/{}'.format(wrkr_uuid),
-                        headers={'Authorization': 'JWT {}'.format(Authorization)}).json()
-
-        if wrkr['ready'] == True:
-            break
-
-    index_file = indexdict[index]
-    print(index_file)
-    res = requests.get('http://localhost:8000/api/workers/get/{}?filename={}'.format(wrkr_uuid, index_file),
-                    headers={'Authorization': 'JWT {}'.format(Authorization)})
-    print(res)
-    content = res.content
-    #with open(index_file, 'wb') as f:
-    #    f.write(content)
-    return content
-    
-def dtm_dsm_chm(project, task, file, authorization):
-    filedict = {
-        'DSM' : "dsm",
-        'DTM' : "dtm",
-    }
-    fileName = filedict[file]
-    
-    res = requests.get('http://localhost:8000/api/projects/{}/tasks/{}/download/{}.tif'.format(project, task, fileName),
-                    headers={'Authorization': 'JWT {}'.format(authorization)})
-    print(res)
-    content = res.content
-    return content
-
-def optionsListCreation(data):
-    options_list = []
-    if data == None:
-        orthophoto_set = {'name': "orthophoto-resolution", 'value': 24}
-        autobound_set = {"name":"auto-boundary","value": True}
-        dsm_set = {"name":"dsm","value":True}
-        dtm_set = {"name":"dtm","value":True}
-
-        options_list.append(orthophoto_set)
-        options_list.append(autobound_set)
-        options_list.append(dsm_set)
-        options_list.append(dtm_set)
-
-        options_final = json.dumps(options_list)
-        print(options_list)
-        return options_final
-        
-    else:
-        option = json.loads(data)
-        for options in option['options']: 
-            if options["value"] == "true":
-                options["value"] = True
-            elif options["value"] == "false":
-                options["value"] = False
-            else:
-                options["value"] = int(options["value"])
-            options_list.append({"name":options["name"],"value":options["value"]})
-            options_final = json.dumps(options_list)
-
-        return options_final
-
-
 @app.post("/login")
 async def auth(user: User):
+    """
+    Authenticate user credentials by sending a POST request to an external authentication API. The API endpoint expects a 
+    JSON payload containing the `username` and `password` of the user. If the authentication is successful, the API responds 
+    with a JSON payload containing a `token`. The `token` is returned to the caller.
+
+    Args:
+        user (User): An instance of the `User` model containing the `username` and `password` of the user.
+
+    Returns:
+        str: A JSON web token (JWT) generated by the external authentication API. This token can be used to authenticate 
+             subsequent requests to protected API endpoints.
+
+    Raises:
+        None
+    """
     res = requests.post('http://localhost:8000/api/token-auth/',
                         data={'username': user.username,
                               'password': user.password}).json()
@@ -206,6 +106,13 @@ async def auth(user: User):
 
 @app.post("/create_project/{name}")
 async def create_proj(name, Authorization: Annotated[str | None, Header()] = None):
+    """
+    Creates a new project by making a POST request to an external API.
+
+    :param name: (str) The name of the project to be created.
+    :param Authorization: (str) [Optional] JWT token for authorization.
+    :return: (int) The ID of the newly created project.
+    """
     proj_res = requests.post('http://localhost:8000/api/projects/',
                         headers={'Authorization': 'JWT {}'.format(Authorization)},
                         data={'name': name}).json()
@@ -215,11 +122,29 @@ async def create_proj(name, Authorization: Annotated[str | None, Header()] = Non
 
 @app.get("/list_projects")
 async def list_projs(Authorization: Annotated[str | None, Header()] = None):
+    """
+    Fetches a list of projects from a remote API endpoint.
+
+    :param Authorization: The JWT token used to authenticate the user.
+    :type Authorization: str | None
+    :return: The list of projects fetched from the API.
+    :rtype: dict
+    """
     res = requests.get('http://localhost:8000/api/projects/', headers={'Authorization': 'JWT {}'.format(Authorization)})
     return res.json()
 
 @app.post("/create_execute_task/{project}")
 async def ask(project, data: str = Form(None), files: List[UploadFile] = File(...), Authorization: Annotated[str | None, Header()] = None):
+    """
+    Creates a task in the specified project and executes it with the given options and uploaded files.
+
+    :param project: (str) The name of the project to create the task in.
+    :param data: (str) Optional data string containing additional task options.
+    :param files: (List[UploadFile]) A list of uploaded files to be used as input for the task.
+    :param Authorization: (str) Optional JWT authorization token to authenticate the user making the request.
+    :return: (dict) A dictionary containing information about the created task.
+    """
+
     options = optionsListCreation(data)
     print(options)
     
@@ -252,7 +177,17 @@ async def ask(project, data: str = Form(None), files: List[UploadFile] = File(..
 
 @app.get("/download/{project}/{task}/{file}")
 async def get_orthophoto(project, task, file : FileName, Authorization: Annotated[str | None, Header()] = None):
-    res = orthophoto(project, task, file, Authorization)
+    """
+    Downloads an orthophoto file for the specified project, task, and file name, and saves it locally.
+
+    :param project: (str) The name of the project containing the task and file.
+    :param task: (str) The name of the task containing the file.
+    :param file: (FileName) The name of the orthophoto file to download.
+    :param Authorization: (str) Optional JWT authorization token to authenticate the user making the request.
+    :return: (FileResponse) A response object containing the downloaded file.
+    """
+
+    res = ortho.Orthophoto(project, task, file, Authorization)
     
     with open(file, 'wb') as f:
         for chunk in res.iter_content(chunk_size=1024):
@@ -263,6 +198,18 @@ async def get_orthophoto(project, task, file : FileName, Authorization: Annotate
 
 @app.post("/index/{project}/{task}/{index}")
 async def get_index(project, task, index : IndexName, data: Optional[Data], Authorization: Annotated[str | None, Header()] = None):
+    """
+    Endpoint that creates an index from the orthophoto of a given task and project.
+
+    :param project: (str) the name of the project.
+    :param task: (str) the name of the task.
+    :param index: (IndexName) the index to be calculated, must be one of the available indexes.
+    :param data: (Optional[Data]) additional data required to calculate some indexes.
+    :param Authorization: (Annotated[str | None, Header()]) optional authorization header.
+
+    :return: (FileResponse) a file response with the calculated index file.
+    """
+
     indexdict = {
         'NDVI' :"orthophoto-NDVI.tif",
         'NDYI' : "orthophoto-NDYI.tif", 
@@ -290,7 +237,7 @@ async def get_index(project, task, index : IndexName, data: Optional[Data], Auth
 
     index_file = indexdict[index]
 
-    content = index_creation(project, task, index, data, Authorization)
+    content = ortho.Index_creation(project, task, index, data, Authorization)
     with open(index_file, 'wb') as f:
         f.write(content)
 
@@ -298,8 +245,16 @@ async def get_index(project, task, index : IndexName, data: Optional[Data], Auth
 
 @app.get("/dsm_dtm_chm/{project}/{task}/{file}")
 async def get_dtm_dsm_chm(project, task, file : MapName, Authorization: Annotated[str | None, Header()] = None):
-    
-    res = dtm_dsm_chm(project, task, file, Authorization)
+    """
+    Returns a digital surface model (DSM), a digital terrain model (DTM), or a canopy height model (CHM)
+    :param project: (str) the name of the project
+    :param task: (str) the name of the task
+    :param file: (str) the name of the map (DSM, DTM, or CHM) to retrieve
+    :param Authorization: (str, optional) authorization header for authenticated requests
+    :return: (FileResponse) a response object that contains the requested map file
+    """
+
+    res = ortho.dtm_dsm_chm(project, task, file, Authorization)
     
     # Write the byte string to a local file as binary data
     with open(file + '.tif', 'wb') as f:
@@ -309,8 +264,19 @@ async def get_dtm_dsm_chm(project, task, file : MapName, Authorization: Annotate
 
 @app.get("/full/{project}/{task}/{index}")
 async def output_creation(project, task, index : IndexName, data: Optional[Data],Authorization: Annotated[str | None, Header()] = None):
+    """
+    Performs full output creation of orthophoto, DSM, DTM, CHM and an index file from a given project and task.
+
+    :param project: (str) A string representing the name of the project.
+    :param task: (str) A string representing the name of the task.
+    :param index: (IndexName) An object of type IndexName representing the name of the index file to be created.
+    :param data: (Optional[Data]) An optional parameter of type Data which is an object representing the data to be used for creating the index file.
+    :param Authorization: (str, optional) An optional parameter of type str which is an annotated header for authorization.
     
-    res = orthophoto(project, task, 'orthophoto.tif', Authorization)
+    :return: (FileResponse) A FileResponse object representing the final output file with all the above-mentioned files combined.
+    """
+
+    res = ortho.Orthophoto(project, task, 'orthophoto.tif', Authorization)
     with open('orthophoto.tif', 'wb') as f:
         for chunk in res.iter_content(chunk_size=1024):
             if chunk:
@@ -318,28 +284,20 @@ async def output_creation(project, task, index : IndexName, data: Optional[Data]
 
     print("HERE")
  
-    content = index_creation(project, task, index, data, Authorization)
+    content = ortho.Index_creation(project, task, index, data, Authorization)
     with open("index.tif", 'wb') as f:
         f.write(content)
 
-    dsm = dtm_dsm_chm(project, task, 'DSM', Authorization)
+    dsm = ortho.dtm_dsm_chm(project, task, 'DSM', Authorization)
     with open('dsm.tif', 'wb') as f:
         f.write(dsm)
 
-    dtm = dtm_dsm_chm(project, task, 'DTM', Authorization)
+    dtm = ortho.dtm_dsm_chm(project, task, 'DTM', Authorization)
     with open('dtm.tif', 'wb') as f:
         f.write(dtm)
 
     resample_list2 = ['index.tif', 'orthophoto.tif']
-    '''
-    source_ortho = 'orthophoto.tif'
-    target_ortho = 'orthophoto_res.tif'
-    source_index = 'orthophoto-NDVI.tif'
-    target_index = 'orthophoto-NDVI_res.tif'
-    # copy the file and rename it
-    shutil.copyfile(source_ortho, target_ortho)
-    shutil.copyfile(source_index, target_index)
-    '''
+
     #Resize the smaller images
     for image in resample_list2:
         with rasterio.open(image) as src:
