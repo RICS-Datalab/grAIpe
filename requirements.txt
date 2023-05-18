@@ -1,0 +1,7 @@
+fastapi
+typing 
+pydantic
+requests
+rasterio
+uvicorn
+python-multipart
