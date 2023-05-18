@@ -14,21 +14,22 @@ API Integration: Developers can easily integrate this API into their own applica
 
 ## Requirements
 
-To use this API, you will need the following:
+To use this API, you will need to install the following applications (if they are not installed already):
 
-webODM: Make sure you have a running instance of webODM, accessible via API endpoints.
+  - [Git](https://git-scm.com/downloads)
+  - [Docker](https://www.docker.com/)
+  - [Docker-compose](https://docs.docker.com/compose/install/)
+  - Python
+  - Pip
 
-Aerial Images: Prepare the aerial images you wish to process in an appropriate format, supported by webODM.
-
-API Credentials: Obtain the necessary credentials (API key, tokens, etc.) to authenticate requests to the webODM API.
 
 ## Installation
 
 1.  Clone the repository to your local machine:
 ```bash
-    git clone https://github.com/OpenDroneMap/WebODM --config core.autocrlf=input --depth 1
-    cd WebODM
-    ./webodm.sh start 
+    git clone https://github.com/RICS-Datalab/grAIpe
+    cd grAIpe
+    ./graipe.sh
 ``` 
 2. Install the required dependencies:
 
@@ -47,13 +48,21 @@ API Credentials: Obtain the necessary credentials (API key, tokens, etc.) to aut
 
 The API provides the following endpoints for interacting with the orthophoto and index calculation functionalities:
 
-POST /api/orthophoto: Submit aerial images for orthophoto generation.
+`POST` /api/login: Submit aerial images for orthophoto generation.
 
-GET /api/orthophoto/:id: Get the status and download links for a specific orthophoto job ID.
+`POST` /api/create_project/{name}
 
-POST /api/index: Calculate an index for a given orthophoto.
+`GET` /api/list_projects
 
-GET /api/index/:id: Get the status and download links for a specific index calculation job ID.
+`POST` /api/create_execute_task/{project}
+
+`GET` /api/download/{project}/{task}/{file}
+
+`POST` /api/index/{project}/{task}/{index}
+
+`GET` /api/dsm_dtm_chm/{project}/{task}/{file}
+
+`GET` /api/full/{project}/{task}/{index}
 
 Please refer to the API documentation for detailed information on request/response formats and example usage.
 
