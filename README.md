@@ -47,13 +47,13 @@ API Credentials: Obtain the necessary credentials (API key, tokens, etc.) to aut
 
 The API provides the following endpoints for interacting with the orthophoto and index calculation functionalities:
 
-    POST /api/orthophoto: Submit aerial images for orthophoto generation.
+POST /api/orthophoto: Submit aerial images for orthophoto generation.
 
-    GET /api/orthophoto/:id: Get the status and download links for a specific orthophoto job ID.
+GET /api/orthophoto/:id: Get the status and download links for a specific orthophoto job ID.
 
-    POST /api/index: Calculate an index for a given orthophoto.
+POST /api/index: Calculate an index for a given orthophoto.
 
-    GET /api/index/:id: Get the status and download links for a specific index calculation job ID.
+GET /api/index/:id: Get the status and download links for a specific index calculation job ID.
 
 Please refer to the API documentation for detailed information on request/response formats and example usage.
 
