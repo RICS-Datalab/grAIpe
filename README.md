@@ -22,7 +22,7 @@ To use this API, you will need to install the following applications (if they ar
   - Python
   - Pip
 
-- Windows users should install Docker Desktop and 
+Windows users should install Docker Desktop and 
   1) make sure Linux containers are enabled (Switch to Linux Containers...), 
   2) give Docker enough CPUs (default 2) and RAM (>4Gb, 16Gb better but leave some for Windows) by going to Settings -- Advanced, and 
   3) select where on your hard drive you want virtual hard drives to reside (Settings -- Advanced -- Images & Volumes).
