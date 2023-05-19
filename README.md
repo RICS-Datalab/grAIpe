@@ -35,24 +35,19 @@ From the Docker Quickstart Terminal or Git Bash (Windows), or from the command l
     cd grAIpe
     ./graipe.sh
 ``` 
-3. Install the required dependencies:
 
-```bash
-    cd your-api-repo
-    npm install
-```
 4. Configure API Credentials:
+  Create an webODM account at: 0.0.0.0:8000
 
-    Update the configuration file (config.js or .env) with your webODM API credentials. Provide the necessary information such as the API endpoint URL, API key, or access tokens.
-
-5. Start the API server:
+5. Ready to go!
+  The API is now running at: 0.0.0.0:8888
 
 
 ## API Endpoints
 
 The API provides the following endpoints for interacting with the orthophoto and index calculation functionalities:
 
-`POST` /api/login: Submit aerial images for orthophoto generation.
+`POST` /api/login
 
 `POST` /api/create_project/{name}
 
@@ -74,6 +69,11 @@ Please refer to the API documentation for detailed information on request/respon
 
 Contributions are welcome! If you encounter any issues or have suggestions for improvement, please feel free to submit bug reports or pull requests.
 
+If you want to contact feel free to email us at:
+
+- [Ricardo Peres](mailto: ricardo.peres@uninova.pt) Responsible researcher
+- [Alexandre Costa] (mailto: alexandre.costa@uninova.pt) Developer and researcher 
+ 
 
 ## License
 
