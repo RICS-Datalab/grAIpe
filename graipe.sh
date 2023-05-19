@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Run the Docker container
-sudo docker run -p 8888:8888 --name graipe webodmapi
+docker pull alexcosta/webodmapi:latest
+docker run -p 8888:8888 -it alexcosta/webodmapi:latest
 
 # Clone the WebODM repository
 git clone https://github.com/OpenDroneMap/WebODM --config core.autocrlf=input --depth 1
