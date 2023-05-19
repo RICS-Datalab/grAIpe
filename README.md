@@ -71,8 +71,8 @@ Contributions are welcome! If you encounter any issues or have suggestions for i
 
 If you want to contact feel free to email us at:
 
-- [Ricardo Peres](mailto: ricardo.peres@uninova.pt) Responsible researcher
-- [Alexandre Costa] (mailto: alexandre.costa@uninova.pt) Developer and researcher 
+- [Ricardo Peres](ricardo.peres@uninova.pt) - Responsible researcher
+- [Alexandre Costa](alexandre.costa@uninova.pt) - Developer and researcher 
  
 
 ## License
