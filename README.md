@@ -21,27 +21,31 @@ To use this API, you will need to install the following applications (if they ar
   - [Docker-compose](https://docs.docker.com/compose/install/)
   - Python
   - Pip
-
+-Windows users should install Docker Desktop and 
+  1) make sure Linux containers are enabled (Switch to Linux Containers...), 
+  2) give Docker enough CPUs (default 2) and RAM (>4Gb, 16Gb better but leave some for Windows) by going to Settings -- Advanced, and 
+  3) select where on your hard drive you want virtual hard drives to reside (Settings -- Advanced -- Images & Volumes).
 
 ## Installation
 
-1.  Clone the repository to your local machine:
+2.  Clone the repository to your local machine
+From the Docker Quickstart Terminal or Git Bash (Windows), or from the command line (Mac / Linux), type:
 ```bash
     git clone https://github.com/RICS-Datalab/grAIpe
     cd grAIpe
     ./graipe.sh
 ``` 
-2. Install the required dependencies:
+3. Install the required dependencies:
 
 ```bash
     cd your-api-repo
     npm install
 ```
-3. Configure API Credentials:
+4. Configure API Credentials:
 
     Update the configuration file (config.js or .env) with your webODM API credentials. Provide the necessary information such as the API endpoint URL, API key, or access tokens.
 
-4. Start the API server:
+5. Start the API server:
 
 
 ## API Endpoints
