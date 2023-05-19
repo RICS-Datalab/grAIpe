@@ -37,10 +37,10 @@ From the Docker Quickstart Terminal or Git Bash (Windows), or from the command l
 ``` 
 
 4. Configure API Credentials:
-  Create an webODM account at: 0.0.0.0:8000
+  - Create an webODM account at: 0.0.0.0:8000
 
 5. Ready to go!
-  The API is now running at: 0.0.0.0:8888
+  - The API is now running at: 0.0.0.0:8888
 
 
 ## API Endpoints
