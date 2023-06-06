@@ -383,5 +383,11 @@ async def output_creation(project, task, index : IndexName, data: Optional[Data]
 
     return FileResponse("final.tif", filename='final.tif')
 
+@app.get("/inference")
+
+async def inference(file : FileName, Authorization: Annotated[str | None, Header()] = None):
+
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8888)
