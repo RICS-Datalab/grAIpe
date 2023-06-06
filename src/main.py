@@ -267,7 +267,7 @@ async def get_dtm_dsm_chm(project, task, file : MapName, Authorization: Annotate
     return FileResponse("{}".format(file + '.tif'), filename=file + '.tif')
 
 @app.get("/full/{project}/{task}/{index}")
-async def output_creation(project, task, index : IndexName, data: Optional[Data],Authorization: Annotated[str | None, Header()] = None):
+async def output_creation(project, task, index : IndexName, data: Optional[Data], Authorization: Annotated[str | None, Header()] = None):
     """
     Performs full output creation of orthophoto, DSM, DTM, CHM and an index file from a given project and task.
 
@@ -285,8 +285,6 @@ async def output_creation(project, task, index : IndexName, data: Optional[Data]
         for chunk in res.iter_content(chunk_size=1024):
             if chunk:
                 f.write(chunk)
-
-    print("HERE")
  
     content = ortho.Index_creation(project, task, index, data, Authorization)
     with open("index.tif", 'wb') as f:
