@@ -149,7 +149,7 @@ async def ask(project, data: str = Form(None), files: List[UploadFile] = File(..
     :return: (dict) A dictionary containing information about the created task.
     """
 
-    options = optionsListCreation(data)
+    options = ortho.optionsListCreation(data)
     print(options)
     
     directory = "uploads"
@@ -169,7 +169,7 @@ async def ask(project, data: str = Form(None), files: List[UploadFile] = File(..
     for item in file_list:
         with open(item, 'rb') as f:
             images.append(('images', (item, f.read(), 'image/tif')))
-    print("here")
+
     res = requests.post('http://localhost:8000/api/projects/{}/tasks/'.format(project),
                 headers={'Authorization': 'JWT {}'.format(Authorization)},
                 files=images,
@@ -278,6 +278,7 @@ async def output_creation(project, task, index : IndexName, data: Optional[Data]
     :param Authorization: (str, optional) An optional parameter of type str which is an annotated header for authorization.
     
     :return: (FileResponse) A FileResponse object representing the final output file with all the above-mentioned files combined.
+                            The Final Orthophoto has the following bands (('Blue', 'Green', 'Red', 'NIR', 'Rededge', None, Index, CHM))
     """
 
     res = ortho.Orthophoto(project, task, 'orthophoto.tif', Authorization)
