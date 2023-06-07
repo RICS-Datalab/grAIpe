@@ -7,4 +7,3 @@ uvicorn
 python-multipart
 sklearn
 matplotlib
-base64
