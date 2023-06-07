@@ -384,9 +384,9 @@ async def output_creation(project, task, index : IndexName, data: Optional[Data]
 
     return FileResponse("final.tif", filename='final.tif')
 
-@app.get("/inference")
+@app.post("/inference")
 async def inference(file : FileName, Authorization: Annotated[str | None, Header()] = None):
-    band_list = seg.load_orthophoto_from_disk()
+    band_list = seg.load_orthophoto_from_disk(file)
     rgb, ndvi = seg.extract_features(band_list)
     labels = seg.segment_image_with_clustering(ndvi, 5)
     img = seg.prepare_response(labels)
