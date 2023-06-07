@@ -5,5 +5,5 @@ requests
 rasterio
 uvicorn
 python-multipart
-sklearn
+scikit-learn
 matplotlib
