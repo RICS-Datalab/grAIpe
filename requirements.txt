@@ -5,3 +5,6 @@ requests
 rasterio
 uvicorn
 python-multipart
+sklearn.cluster
+matplotlib
+base64
