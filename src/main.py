@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse
 from rasterio.enums import Resampling
 from pydantic import BaseModel
 import orthophoto as ortho
+import segmentation as seg
 from enum import Enum 
 import requests
 import rasterio
@@ -385,7 +386,10 @@ async def output_creation(project, task, index : IndexName, data: Optional[Data]
 
 @app.get("/inference")
 async def inference(file : FileName, Authorization: Annotated[str | None, Header()] = None):
-    pass
+    band_list = seg.load_orthophoto_from_disk()
+    rgb, ndvi = seg.extract_features(band_list)
+    labels = seg.segment_image_with_clustering(ndvi, 5)
+    img = seg.prepare_response(labels)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8888)
