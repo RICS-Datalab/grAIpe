@@ -19,21 +19,21 @@ import base64
     Returns
     -------
     band1_norm : numpy array
-        The normalized band 1
+        The Blue band
     band2_norm : numpy array
-        The normalized band 2
+        The Green band 
     band3_norm : numpy array
-        The normalized band 3
+        The Red band 
     band4_norm : numpy array
-        The normalized band 4
+        The NIR band
     band5_norm : numpy array
-        The normalized band 5
+        The Red Edge band
     band6 : numpy array
-        The band 6
+        Empty Band
     band7_norm : numpy array
-        The normalized band 7
+        The computed Index band
     band8 : numpy array
-        The band 8
+        The Canopy Height Model (CHM)
     
     Examples
     --------
@@ -76,7 +76,7 @@ def load_orthophoto_from_disk(path: str = "./final.tif", normalize: bool = True)
 
 """ 
     This function extracts the features from the bands and returns them as numpy arrays.
-    The features are returned in the following order: rgb, ndvi
+    The features are returned in the following order: rgb, ndvi, savi
 
     Parameters
     ----------
@@ -89,6 +89,8 @@ def load_orthophoto_from_disk(path: str = "./final.tif", normalize: bool = True)
         The RGB image
     ndvi : numpy array
         The NDVI image
+    ndvi : numpy array
+        The SAVI image
 
     Examples
     --------
@@ -115,8 +117,12 @@ def extract_features(bands: list):
     # Compute NDVI (camera was an Altum sensor?)
     # NDVI = (NIR - Red) / (NIR + Red)
     ndvi = (band4_norm - band3_norm) / (band4_norm + band3_norm)
+    ## SAVI (Soil Adjusted Vegetation Index)
+    # SAVI = ((NIR - Red) / (NIR + Red + L)) * (1 + L)
+    L = 0.8
+    savi = ((band4_norm - band3_norm) / (band4_norm + band3_norm + L)) * (1 + L)
 
-    return rgb, ndvi
+    return rgb, ndvi, savi
 
 
 """
@@ -141,26 +147,16 @@ def extract_features(bands: list):
 """
 
 
-def segment_image_with_clustering(ndvi: np.array, k: int = 5):
-    # remove nan values from ndvi
-    ndvi = np.nan_to_num(ndvi)
+def segment_image_with_clustering(feature_image: np.array, k: int = 5):
+    # remove nan values from feature_image
+    clean_feature_image = np.nan_to_num(feature_image)
     # Flatten the NDVI array to 1D array, as required for scikit-learn
-    flattened_ndvi = ndvi.flatten().reshape(-1, 1)
+    flattened_feature_image = clean_feature_image.flatten().reshape(-1, 1)
     # Step 3: Unsupervised Learning
     # Perform KMeans clustering (change n_clusters as necessary)
-    kmeans = KMeans(n_clusters=k).fit(flattened_ndvi)
+    kmeans = KMeans(n_clusters=k).fit(flattened_feature_image)
     # Reshape the labels to the original image shape
-    labels = kmeans.labels_.reshape(ndvi.shape)
-
-    # merge the clusters
-    labels[labels == 1] = 0
-    labels[labels == 2] = 1
-    labels[labels == 3] = 1
-    labels[labels == 4] = 2
-
-    # Assign a unique label to the background pixels (pixels with value 0 in the original NDVI)
-    background_label = 3
-    labels[ndvi == 0] = background_label
+    labels = kmeans.labels_.reshape(feature_image.shape)
 
     return labels
 
